@@ -1,0 +1,88 @@
+openapi: 3.0.1
+info:
+  title: ProyectoMoviles API
+  version: 1.0.0
+paths:
+  /api/departments:
+    get:
+      summary: List departments with filters and pagination
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: min_price
+          schema: { type: number }
+        - in: query
+          name: max_price
+          schema: { type: number }
+        - in: query
+          name: bedrooms
+          schema: { type: integer }
+        - in: query
+          name: sort
+          schema: { type: string }
+        - in: query
+          name: per_page
+          schema: { type: integer }
+      responses:
+        '200':
+          description: A paginated list of departments
+  /api/departments/{id}:
+    get:
+      summary: Get department detail
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Department object
+  /api/auth/login:
+    post:
+      summary: Login and receive token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email: { type: string }
+                password: { type: string }
+      responses:
+        '200':
+          description: token
+  /api/departments/{id}/favorite:
+    post:
+      summary: Mark department as favorite (auth required)
+    delete:
+      summary: Remove favorite (auth required)
+  /api/departments/{id}/rate:
+    post:
+      summary: Add a review/rating (auth required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                stars: { type: integer }
+                comment: { type: string }
+  /api/departments/{id}/images:
+    post:
+      summary: Upload images for department (auth & permission)
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                images:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+components: {}

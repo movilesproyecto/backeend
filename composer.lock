@@ -4,7 +4,11 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
+<<<<<<< HEAD
     "content-hash": "d3c16cb86c42230c6c023d9a5d9bcf42",
+=======
+    "content-hash": "8f387a0734f3bf879214e4aa2fca6e2f",
+>>>>>>> 5f75578 (implementacion Api endpoints, autentificacion con sanctum, migracion con la base de datos y mas)
     "packages": [
         {
             "name": "brick/math",
@@ -1335,6 +1339,7 @@
         },
         {
             "name": "laravel/sanctum",
+<<<<<<< HEAD
             "version": "v4.2.2",
             "source": {
                 "type": "git",
@@ -1345,6 +1350,18 @@
                 "type": "zip",
                 "url": "https://api.github.com/repos/laravel/sanctum/zipball/fd447754d2d3f56950d53b930128af2e3b617de9",
                 "reference": "fd447754d2d3f56950d53b930128af2e3b617de9",
+=======
+            "version": "v4.2.1",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/laravel/sanctum.git",
+                "reference": "f5fb373be39a246c74a060f2cf2ae2c2145b3664"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/laravel/sanctum/zipball/f5fb373be39a246c74a060f2cf2ae2c2145b3664",
+                "reference": "f5fb373be39a246c74a060f2cf2ae2c2145b3664",
+>>>>>>> 5f75578 (implementacion Api endpoints, autentificacion con sanctum, migracion con la base de datos y mas)
                 "shasum": ""
             },
             "require": {
@@ -1394,7 +1411,11 @@
                 "issues": "https://github.com/laravel/sanctum/issues",
                 "source": "https://github.com/laravel/sanctum"
             },
+<<<<<<< HEAD
             "time": "2026-01-06T23:11:51+00:00"
+=======
+            "time": "2025-11-21T13:59:03+00:00"
+>>>>>>> 5f75578 (implementacion Api endpoints, autentificacion con sanctum, migracion con la base de datos y mas)
         },
         {
             "name": "laravel/serializable-closure",
