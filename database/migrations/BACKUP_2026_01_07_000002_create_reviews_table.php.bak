@@ -1,6 +1,0 @@
-<?php
-// BACKUP ONLY - This file is not executed by Laravel migrations
-// Original duplicate migration that attempted to create reviews table
-// The table is created by: 2026_01_06_000004_create_reviews_table.php
-// This file can be safely deleted.
-?>
