@@ -1,13 +1,5 @@
 <?php
 
-<<<<<<< HEAD
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Route;
-
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
-=======
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\ExampleController;
 use App\Http\Controllers\Api\DepartmentController;
@@ -54,4 +46,3 @@ Route::middleware('auth:sanctum')->group(function () {
 	Route::get('reservations/{reservation}', [ReservationController::class, 'show']);
 	Route::delete('reservations/{reservation}', [ReservationController::class, 'destroy']);
 });
->>>>>>> 5f75578 (implementacion Api endpoints, autentificacion con sanctum, migracion con la base de datos y mas)
