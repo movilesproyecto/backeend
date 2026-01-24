@@ -71,6 +71,19 @@ class ReservationController extends Controller
             'notes' => $data['notes'] ?? null,
         ]);
 
+        // Enviar notificación
+        NotificationController::sendNotification(
+            $user->id,
+            'Reserva ' . ($reservation->status === 'confirmed' ? 'Confirmada' : 'Pendiente'),
+            $reservation->status === 'confirmed'
+                ? 'Tu reserva en ' . $department->name . ' ha sido confirmada'
+                : 'Tu reserva en ' . $department->name . ' está pendiente de confirmación',
+            $reservation->status === 'confirmed' ? 'success' : 'info',
+            $department->id,
+            'reservation',
+            $reservation->id
+        );
+
         return response()->json([
             'success' => true,
             'message' => 'Reserva creada exitosamente',

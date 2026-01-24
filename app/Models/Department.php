@@ -37,4 +37,12 @@ class Department extends Model
     {
         return $this->belongsToMany(User::class, 'favorites')->withTimestamps();
     }
+
+    /**
+     * Relación con las imágenes del departamento
+     */
+    public function images()
+    {
+        return $this->hasMany(Image::class);
+    }
 }

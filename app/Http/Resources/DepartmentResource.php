@@ -11,6 +11,49 @@ class DepartmentResource extends JsonResource
      */
     public function toArray($request): array
     {
+        // Obtener las imágenes: pueden venir del JSON column o de la relación
+        $images = [];
+
+        // Primero intenta obtener desde el column JSON (URLs guardadas directamente)
+        if (isset($this->images) && is_string($this->images)) {
+            $imageUrls = json_decode($this->images, true) ?? [];
+            $images = array_map(function($url, $index) {
+                return [
+                    'id' => $index,
+                    'url' => $url,
+                    'fileName' => basename($url),
+                ];
+            }, $imageUrls, array_keys($imageUrls));
+        }
+        // Si no hay JSON, intenta obtener de la relación (tabla images)
+        elseif ($this->images && is_iterable($this->images) && count($this->images) > 0) {
+            $images = collect($this->images)->map(function($image) {
+                return [
+                    'id' => $image->id ?? 0,
+                    'url' => url('/storage/' . $image->file_path),
+                    'fileName' => $image->file_name,
+                ];
+            })->toArray();
+        }
+
+        // Convertir imagen binaria (bytea) a base64 si existe
+        $imageBinary = null;
+        if ($this->images_binary) {
+            try {
+                $imageData = $this->images_binary;
+                // Si es un resource (stream de PostgreSQL), convertir a string
+                if (is_resource($imageData)) {
+                    $imageData = stream_get_contents($imageData);
+                }
+                // El seeder guarda directamente base64
+                if ($imageData) {
+                    $imageBinary = 'data:image/jpeg;base64,' . $imageData;
+                }
+            } catch (\Exception $e) {
+                // Si hay error, dejar imageBinary como null
+            }
+        }
+
         return [
             'id' => (string)$this->id,
             'name' => $this->name,
@@ -20,7 +63,8 @@ class DepartmentResource extends JsonResource
             'rating' => $this->rating_avg ?? $this->rating ?? 4.0,
             'description' => $this->description ?? '',
             'amenities' => is_string($this->amenities) ? json_decode($this->amenities, true) : ($this->amenities ?? []),
-            'images' => is_string($this->images) ? json_decode($this->images, true) : ($this->images ?? []),
+            'images' => $images,
+            'imageBinary' => $imageBinary,
             'published' => (bool)($this->published ?? true),
             'created_at' => $this->created_at?->toDateTimeString(),
             'updated_at' => $this->updated_at?->toDateTimeString(),

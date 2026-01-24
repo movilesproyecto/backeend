@@ -17,6 +17,10 @@ class User extends Authenticatable
         'email',
         'password',
         'role',
+        'phone',
+        'gender',
+        'department',
+        'bio',
     ];
 
     protected $hidden = [
@@ -27,4 +31,20 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    /**
+     * Relación con notificaciones
+     */
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    /**
+     * Obtener notificaciones no leídas
+     */
+    public function unreadNotifications()
+    {
+        return $this->notifications()->unread();
+    }
 }

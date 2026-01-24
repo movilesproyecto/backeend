@@ -77,4 +77,63 @@ class AuthController extends Controller
 
         return response()->json(['message' => 'Logged out']);
     }
+
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $data = $request->validate([
+            'name' => 'nullable|string|max:255',
+            'email' => 'nullable|string|email|max:255|unique:users,email,' . $user->id,
+            'phone' => 'nullable|string|max:20',
+            'gender' => 'nullable|string|in:Masculino,Femenino,Otro',
+            'department' => 'nullable|string|max:255',
+            'bio' => 'nullable|string|max:500',
+            'current_password' => 'nullable|string',
+            'password' => 'nullable|string|min:6',
+            'password_confirmation' => 'nullable|string',
+        ]);
+
+        // Normalizar email a minúsculas
+        if (isset($data['email']) && $data['email']) {
+            $data['email'] = strtolower($data['email']);
+        }
+
+        // Validar contraseña actual si se va a cambiar
+        if ((isset($data['password']) && $data['password'])) {
+            if (!isset($data['current_password']) || !$data['current_password']) {
+                return response()->json(['message' => 'Current password is required to change password'], 422);
+            }
+            if (!Hash::check($data['current_password'], $user->password)) {
+                return response()->json(['message' => 'Current password is incorrect'], 422);
+            }
+            // Hash la nueva contraseña
+            $data['password'] = Hash::make($data['password']);
+        }
+
+        // Limpiar datos que no pertenecen al modelo
+        unset($data['current_password'], $data['password_confirmation']);
+
+        // Filtrar valores nulos o vacíos antes de actualizar
+        $dataToUpdate = array_filter($data, function($value) {
+            return $value !== null && $value !== '';
+        });
+
+        try {
+            $user->update($dataToUpdate);
+
+            return response()->json([
+                'message' => 'Profile updated successfully',
+                'user' => $user
+            ]);
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error updating profile: ' . $e->getMessage(),
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
 }
