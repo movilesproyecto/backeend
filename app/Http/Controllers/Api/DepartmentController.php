@@ -19,6 +19,7 @@ class DepartmentController extends Controller
             ->with(['images' => function($q) {
                 $q->orderBy('is_primary', 'desc')->orderBy('id', 'asc')->limit(1);
             }])
+            ->with('favoritedBy')
             ->where('published', true);
 
         // Filters

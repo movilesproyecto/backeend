@@ -63,6 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('reservations', [ReservationController::class, 'store']);
     Route::get('reservations', [ReservationController::class, 'index']);
     Route::get('reservations/{reservation}', [ReservationController::class, 'show']);
+    Route::patch('reservations/{reservation}/status', [ReservationController::class, 'updateStatus']);
     Route::delete('reservations/{reservation}', [ReservationController::class, 'destroy']);
 
     // Notifications

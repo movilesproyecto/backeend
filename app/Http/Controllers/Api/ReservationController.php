@@ -98,11 +98,11 @@ class ReservationController extends Controller
     {
         $user = $request->user();
         $reservations = Reservation::where('user_id', $user->id)
-            ->with(['department', 'user'])
+            ->with(['department:id,name,price_per_night,images', 'user:id,name,email'])
             ->orderBy('reservation_date', 'desc')
-            ->paginate(12);
+            ->get();
 
-        return response()->json($reservations);
+        return response()->json($reservations->toArray());
     }
 
     /**
@@ -167,6 +167,55 @@ class ReservationController extends Controller
             'available_slots' => array_values($available),
             'booked_slots' => $bookedSlots,
             'date' => $data['date'],
+        ]);
+    }
+
+    /**
+     * Actualizar el estado de una reserva (solo para administradores)
+     */
+    public function updateStatus(Request $request, Reservation $reservation)
+    {
+        $user = $request->user();
+
+        // Verificar permisos: solo administradores pueden cambiar estados
+        $userRole = strtolower($user->role ?? 'user');
+        if (!in_array($userRole, ['admin', 'superadmin'])) {
+            return response()->json([
+                'message' => 'No tienes permisos para actualizar el estado de las reservas.',
+                'success' => false
+            ], 403);
+        }
+
+        $data = $request->validate([
+            'status' => 'required|in:pending,confirmed,completed,cancelled',
+        ]);
+
+        // Validar transiciones de estado permitidas
+        $currentStatus = $reservation->status;
+        $newStatus = $data['status'];
+
+        // Solo permitir ciertas transiciones
+        $allowedTransitions = [
+            'pending' => ['confirmed', 'cancelled'],
+            'confirmed' => ['completed', 'cancelled'],
+            'completed' => [], // No se puede cambiar una vez completada
+            'cancelled' => [], // No se puede cambiar una vez cancelada
+        ];
+
+        if (!in_array($newStatus, $allowedTransitions[$currentStatus] ?? [])) {
+            return response()->json([
+                'message' => "No se puede cambiar el estado de '{$currentStatus}' a '{$newStatus}'.",
+                'success' => false
+            ], 422);
+        }
+
+        // Actualizar el estado
+        $reservation->update(['status' => $newStatus]);
+
+        return response()->json([
+            'message' => 'Estado de la reserva actualizado correctamente.',
+            'success' => true,
+            'reservation' => $reservation->fresh()
         ]);
     }
 }
