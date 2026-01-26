@@ -103,10 +103,18 @@ class ReservationController extends Controller
         /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        $reservations = Reservation::where('user_id', $user->id)
-            ->with(['department', 'user'])
-            ->orderByDesc('reservation_date') // Helper Laravel
-            ->paginate(12);
+        // Si el usuario es admin o superadmin, mostrar todas las reservas
+        // Si es usuario normal, mostrar solo sus reservas
+        if ($user->role === 'admin' || $user->role === 'superadmin') {
+            $reservations = Reservation::with(['department', 'user'])
+                ->orderByDesc('reservation_date')
+                ->paginate(12);
+        } else {
+            $reservations = Reservation::where('user_id', $user->id)
+                ->with(['department', 'user'])
+                ->orderByDesc('reservation_date')
+                ->paginate(12);
+        }
 
         return response()->json($reservations->toArray());
     }
