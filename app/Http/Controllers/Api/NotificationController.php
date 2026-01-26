@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Notification;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Auth;
 
 class NotificationController extends Controller
@@ -12,37 +13,35 @@ class NotificationController extends Controller
     /**
      * Obtener todas las notificaciones del usuario autenticado
      */
-    public function index(Request $request)
+    public function index(Request $request): JsonResponse
     {
-        $user = $request->user();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user(); // Usar Auth::user() ayuda al editor más que $request->user()
+
         if (!$user) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        // Al poner el comentario @var arriba, el editor ya sabe que 'notifications()' existe
         $query = $user->notifications();
 
-        // Filtrar por tipo si se proporciona
-        if ($request->has('type')) {
-            $query->where('type', $request->type);
-        }
+        $query->when($request->input('type'), fn($q, $type) => $q->where('type', $type));
 
-        // Filtrar por estado de lectura
         if ($request->has('read')) {
-            $read = $request->read === 'true' || $request->read === true;
-            $query->where('read', $read);
+            $query->where('read', $request->boolean('read'));
         }
 
         $notifications = $query->latest()->paginate(15);
 
         return response()->json([
-            'data' => $notifications->items(),
-            'total' => $notifications->total(),
+            'data'         => $notifications->items(),
+            'total'        => $notifications->total(),
             'unread_count' => $user->unreadNotifications()->count(),
-            'pagination' => [
+            'pagination'   => [
                 'current_page' => $notifications->currentPage(),
-                'per_page' => $notifications->perPage(),
-                'total' => $notifications->total(),
-                'last_page' => $notifications->lastPage(),
+                'per_page'     => $notifications->perPage(),
+                'total'        => $notifications->total(),
+                'last_page'    => $notifications->lastPage(),
             ]
         ]);
     }
@@ -50,14 +49,15 @@ class NotificationController extends Controller
     /**
      * Obtener una notificación específica
      */
-    public function show(Request $request, Notification $notification)
+    public function show(Request $request, Notification $notification): JsonResponse
     {
-        $user = $request->user();
-        if (!$user || $notification->user_id !== $user->id) {
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+
+        if (!$user || !$this->ensureOwnership($user, $notification)) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
-        // Marcar como leída al ver
         if (!$notification->read) {
             $notification->markAsRead();
         }
@@ -68,17 +68,19 @@ class NotificationController extends Controller
     /**
      * Marcar una notificación como leída
      */
-    public function markAsRead(Request $request, Notification $notification)
+    public function markAsRead(Request $request, Notification $notification): JsonResponse
     {
-        $user = $request->user();
-        if (!$user || $notification->user_id !== $user->id) {
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+
+        if (!$user || !$this->ensureOwnership($user, $notification)) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
         $notification->markAsRead();
 
         return response()->json([
-            'message' => 'Notification marked as read',
+            'message'      => 'Notification marked as read',
             'notification' => $notification
         ]);
     }
@@ -86,17 +88,20 @@ class NotificationController extends Controller
     /**
      * Marcar todas las notificaciones como leídas
      */
-    public function markAllAsRead(Request $request)
+    public function markAllAsRead(Request $request): JsonResponse
     {
-        $user = $request->user();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+
         if (!$user) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
+        // El editor ya no marcará error aquí gracias al @var
         $user->unreadNotifications()->update(['read' => true]);
 
         return response()->json([
-            'message' => 'All notifications marked as read',
+            'message'      => 'All notifications marked as read',
             'unread_count' => 0
         ]);
     }
@@ -104,10 +109,12 @@ class NotificationController extends Controller
     /**
      * Eliminar una notificación
      */
-    public function destroy(Request $request, Notification $notification)
+    public function destroy(Request $request, Notification $notification): JsonResponse
     {
-        $user = $request->user();
-        if (!$user || $notification->user_id !== $user->id) {
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+
+        if (!$user || !$this->ensureOwnership($user, $notification)) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
 
@@ -119,9 +126,11 @@ class NotificationController extends Controller
     /**
      * Eliminar todas las notificaciones
      */
-    public function deleteAll(Request $request)
+    public function deleteAll(Request $request): JsonResponse
     {
-        $user = $request->user();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+
         if (!$user) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
@@ -134,9 +143,11 @@ class NotificationController extends Controller
     /**
      * Obtener conteo de notificaciones no leídas
      */
-    public function unreadCount(Request $request)
+    public function unreadCount(Request $request): JsonResponse
     {
-        $user = $request->user();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+
         if (!$user) {
             return response()->json(['message' => 'Unauthorized'], 401);
         }
@@ -146,34 +157,40 @@ class NotificationController extends Controller
         ]);
     }
 
-    /**
-     * Crear una notificación (función auxiliar para otras partes del sistema)
-     */
+    // --- Helpers estáticos ---
+
     public static function sendNotification($userId, $title, $message, $type = 'info', $departmentId = null, $actionType = null, $actionId = null)
     {
         return Notification::create([
-            'user_id' => $userId,
-            'title' => $title,
-            'message' => $message,
-            'type' => $type,
-            'icon' => self::getIconForType($type),
+            'user_id'       => $userId,
+            'title'         => $title,
+            'message'       => $message,
+            'type'          => $type,
+            'icon'          => self::getIconForType($type),
             'department_id' => $departmentId,
-            'action_type' => $actionType,
-            'action_id' => $actionId,
+            'action_type'   => $actionType,
+            'action_id'     => $actionId,
         ]);
     }
 
-    /**
-     * Obtener el icono según el tipo de notificación
-     */
     public static function getIconForType($type)
     {
-        $icons = [
+        return match ($type) {
             'success' => 'check-circle',
             'warning' => 'exclamation-circle',
-            'error' => 'times-circle',
-            'info' => 'bell',
-        ];
-        return $icons[$type] ?? 'bell';
+            'error'   => 'times-circle',
+            'info'    => 'bell',
+            default   => 'bell',
+        };
+    }
+
+    /**
+     * Helper privado.
+     * Importante: El type hint del $user ayuda al editor aquí también.
+     * @param \App\Models\User $user
+     */
+    private function ensureOwnership($user, Notification $notification): bool
+    {
+        return $notification->user_id === $user->id;
     }
 }
