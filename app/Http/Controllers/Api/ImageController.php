@@ -6,36 +6,35 @@ use App\Http\Controllers\Controller;
 use App\Models\Image;
 use App\Models\Department;
 use Illuminate\Http\Request;
+use Illuminate\Http\JsonResponse; // Importante para tipado
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Auth; // Importante para el editor
 
 class ImageController extends Controller
 {
     /**
      * Obtener todas las imágenes de un departamento
      */
-    public function index(Department $department)
+    public function index(Department $department): JsonResponse
     {
         $images = $department->images()
             ->select('id', 'department_id', 'file_name', 'file_path', 'file_size', 'mime_type', 'is_primary', 'created_at')
-            ->orderBy('is_primary', 'desc')
-            ->orderBy('created_at', 'asc')
+            ->orderByDesc('is_primary') // Helper de Laravel más limpio
+            ->orderBy('created_at')
             ->get()
-            ->map(function($image) {
-                return [
-                    'id' => $image->id,
-                    'departmentId' => $image->department_id,
-                    'fileName' => $image->file_name,
-                    'url' => url('/storage/' . $image->file_path),
-                    'fileSize' => $image->file_size,
-                    'mimeType' => $image->mime_type,
-                    'isPrimary' => $image->is_primary,
-                    'createdAt' => $image->created_at->toIso8601String(),
-                ];
-            });
+            ->map(fn($image) => [
+                'id'           => $image->id,
+                'departmentId' => $image->department_id,
+                'fileName'     => $image->file_name,
+                'url'          => url('/storage/' . $image->file_path),
+                'fileSize'     => $image->file_size,
+                'mimeType'     => $image->mime_type,
+                'isPrimary'    => (bool) $image->is_primary,
+                'createdAt'    => $image->created_at->toIso8601String(),
+            ]);
 
         return response()->json([
-            'data' => $images,
+            'data'  => $images,
             'total' => $images->count(),
         ]);
     }
@@ -43,65 +42,63 @@ class ImageController extends Controller
     /**
      * Cargar una o múltiples imágenes
      */
-    public function store(Request $request, Department $department)
+    public function store(Request $request, Department $department): JsonResponse
     {
-        // Autorizar que el usuario pueda actualizar el departamento
         $this->authorize('update', $department);
 
-        // Validar archivos
         $request->validate([
-            'images' => 'required|array|min:1|max:10',
-            'images.*' => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120', // 5MB máximo
-            'is_primary' => 'nullable|array',
+            'images'       => 'required|array|min:1|max:10',
+            'images.*'     => 'required|image|mimes:jpeg,png,jpg,gif,webp|max:5120',
+            'is_primary'   => 'nullable|array',
             'is_primary.*' => 'boolean',
         ]);
 
         $user = Auth::user();
         $uploadedImages = [];
 
+        // Obtenemos flags de primary de forma segura
+        $primaryFlags = $request->input('is_primary', []);
+
         if ($request->hasFile('images')) {
             foreach ($request->file('images') as $index => $file) {
                 try {
-                    // Generar nombre único
                     $fileName = time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
 
-                    // Guardar en storage/app/public/departments/{id}/
                     $path = $file->storeAs(
                         'departments/' . $department->id,
                         $fileName,
                         'public'
                     );
 
-                    // Si la imagen actual debe ser primaria
-                    $isPrimary = isset($request->is_primary[$index]) && $request->is_primary[$index] === true;
+                    // Lógica para determinar si es primaria
+                    $isPrimaryInput = isset($primaryFlags[$index]) && filter_var($primaryFlags[$index], FILTER_VALIDATE_BOOLEAN);
 
-                    // Si esta es la primera imagen, hacerla primaria por defecto
-                    if ($index === 0 && !$department->images()->where('is_primary', true)->exists()) {
-                        $isPrimary = true;
-                    }
+                    // Si es la primera imagen absoluta del departamento, forzar como primaria
+                    $isFirstImage = $index === 0 && $department->images()->doesntExist();
 
-                    // Si esta debe ser primaria, las demás no lo serán
+                    $isPrimary = $isPrimaryInput || $isFirstImage;
+
+                    // Si esta es primaria, quitar el flag a las demás
                     if ($isPrimary) {
                         $department->images()->update(['is_primary' => false]);
                     }
 
-                    // Crear registro en base de datos
                     $image = Image::create([
                         'department_id' => $department->id,
-                        'file_path' => $path,
-                        'file_name' => $file->getClientOriginalName(),
-                        'file_size' => $file->getSize(),
-                        'mime_type' => $file->getMimeType(),
-                        'uploaded_by' => $user->id,
-                        'is_primary' => $isPrimary,
+                        'file_path'     => $path,
+                        'file_name'     => $file->getClientOriginalName(),
+                        'file_size'     => $file->getSize(),
+                        'mime_type'     => $file->getMimeType(),
+                        'uploaded_by'   => $user->id,
+                        'is_primary'    => $isPrimary,
                     ]);
 
                     $uploadedImages[] = [
-                        'id' => $image->id,
-                        'fileName' => $image->file_name,
-                        'url' => url('/storage/' . $image->file_path),
-                        'fileSize' => $image->file_size,
-                        'mimeType' => $image->mime_type,
+                        'id'        => $image->id,
+                        'fileName'  => $image->file_name,
+                        'url'       => url('/storage/' . $image->file_path),
+                        'fileSize'  => $image->file_size,
+                        'mimeType'  => $image->mime_type,
                         'isPrimary' => $image->is_primary,
                         'createdAt' => $image->created_at->toIso8601String(),
                     ];
@@ -115,86 +112,81 @@ class ImageController extends Controller
         }
 
         return response()->json([
-            'message' => 'Imágenes subidas correctamente',
+            'message'  => 'Imágenes subidas correctamente',
             'uploaded' => count($uploadedImages),
-            'images' => $uploadedImages,
+            'images'   => $uploadedImages,
         ], 201);
     }
 
     /**
      * Obtener una imagen específica
      */
-    public function show(Department $department, Image $image)
+    public function show(Department $department, Image $image): JsonResponse
     {
-        // Verificar que la imagen pertenece al departamento
-        if ($image->department_id !== $department->id) {
+        if (!$this->ensureOwnership($department, $image)) {
             return response()->json(['message' => 'No encontrado'], 404);
         }
 
         return response()->json([
-            'id' => $image->id,
+            'id'           => $image->id,
             'departmentId' => $image->department_id,
-            'fileName' => $image->file_name,
-            'url' => url('/storage/' . $image->file_path),
-            'fileSize' => $image->file_size,
-            'mimeType' => $image->mime_type,
-            'isPrimary' => $image->is_primary,
-            'uploadedBy' => $image->uploaded_by,
-            'createdAt' => $image->created_at->toIso8601String(),
-            'updatedAt' => $image->updated_at->toIso8601String(),
+            'fileName'     => $image->file_name,
+            'url'          => url('/storage/' . $image->file_path),
+            'fileSize'     => $image->file_size,
+            'mimeType'     => $image->mime_type,
+            'isPrimary'    => (bool) $image->is_primary,
+            'uploadedBy'   => $image->uploaded_by,
+            'createdAt'    => $image->created_at->toIso8601String(),
+            'updatedAt'    => $image->updated_at->toIso8601String(),
         ]);
     }
 
     /**
      * Actualizar información de la imagen
      */
-    public function update(Request $request, Department $department, Image $image)
+    public function update(Request $request, Department $department, Image $image): JsonResponse
     {
-        // Autorizar
         $this->authorize('update', $department);
 
-        // Verificar que la imagen pertenece al departamento
-        if ($image->department_id !== $department->id) {
+        if (!$this->ensureOwnership($department, $image)) {
             return response()->json(['message' => 'No encontrado'], 404);
         }
 
-        $request->validate([
-            'is_primary' => 'sometimes|boolean',
-        ]);
+        $request->validate(['is_primary' => 'sometimes|boolean']);
 
         if ($request->has('is_primary')) {
-            if ($request->is_primary === true) {
-                // Quitar primary de todas las otras imágenes
-                $department->images()->update(['is_primary' => false]);
+            // Usamos el helper boolean de Laravel para mayor seguridad
+            $isPrimary = $request->boolean('is_primary');
+
+            if ($isPrimary) {
+                // Optimización: Actualizar todas las demás a false excepto la actual
+                $department->images()->where('id', '!=', $image->id)->update(['is_primary' => false]);
             }
-            $image->is_primary = $request->is_primary;
-            $image->save();
+
+            $image->update(['is_primary' => $isPrimary]);
         }
 
         return response()->json([
-            'id' => $image->id,
+            'id'           => $image->id,
             'departmentId' => $image->department_id,
-            'fileName' => $image->file_name,
-            'url' => url('/storage/' . $image->file_path),
-            'isPrimary' => $image->is_primary,
-            'updatedAt' => $image->updated_at->toIso8601String(),
+            'fileName'     => $image->file_name,
+            'url'          => url('/storage/' . $image->file_path),
+            'isPrimary'    => (bool) $image->is_primary,
+            'updatedAt'    => $image->updated_at->toIso8601String(),
         ]);
     }
 
     /**
      * Eliminar una imagen
      */
-    public function destroy(Department $department, Image $image)
+    public function destroy(Department $department, Image $image): JsonResponse
     {
-        // Autorizar
         $this->authorize('update', $department);
 
-        // Verificar que la imagen pertenece al departamento
-        if ($image->department_id !== $department->id) {
+        if (!$this->ensureOwnership($department, $image)) {
             return response()->json(['message' => 'No encontrado'], 404);
         }
 
-        // Eliminar archivo del storage
         if (Storage::disk('public')->exists($image->file_path)) {
             Storage::disk('public')->delete($image->file_path);
         }
@@ -211,7 +203,7 @@ class ImageController extends Controller
     /**
      * Obtener imagen primaria de un departamento
      */
-    public function primary(Department $department)
+    public function primary(Department $department): JsonResponse
     {
         $image = $department->images()->where('is_primary', true)->first();
 
@@ -220,11 +212,19 @@ class ImageController extends Controller
         }
 
         return response()->json([
-            'id' => $image->id,
+            'id'       => $image->id,
             'fileName' => $image->file_name,
-            'url' => url('/storage/' . $image->file_path),
+            'url'      => url('/storage/' . $image->file_path),
             'fileSize' => $image->file_size,
             'mimeType' => $image->mime_type,
         ]);
+    }
+
+    /**
+     * Helper privado para verificar pertenencia sin repetir código
+     */
+    private function ensureOwnership(Department $department, Image $image): bool
+    {
+        return $image->department_id === $department->id;
     }
 }
